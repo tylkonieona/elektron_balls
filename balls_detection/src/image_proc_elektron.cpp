@@ -13,6 +13,9 @@
 #include <geometry_msgs/Twist.h>
 #include <ros/console.h>
 #include <geometry_msgs/Point.h>
+#include <std_msgs/Float32.h>
+#include <image_geometry/pinhole_camera_model.h>
+#include <tf/transform_listener.h>
 
 using namespace cv;
 
@@ -22,6 +25,8 @@ namespace enc = sensor_msgs::image_encodings;
 //Use method of ImageTransport to create image publisher
 image_transport::Publisher pub;
 ros::Publisher balls;
+ros::Publisher selected_ball;
+image_geometry::PinholeCameraModel cam_model;
 
 
 int ilepilek = 0;
@@ -34,7 +39,11 @@ vector<Vec3f> circles_all;
 Vec3f last_circle(0,0,0);
 
 
+geometry_msgs::Point wybrana;
+
+
 //This function is called everytime a new image is published
+
 void imageCallback(const sensor_msgs::ImageConstPtr& original_image)
 {
     //Convert from the ROS image message to a CvImage suitable for working with OpenCV for processing
@@ -139,7 +148,7 @@ void imageCallback(const sensor_msgs::ImageConstPtr& original_image)
 
         //TODO: tylko tutaj wysylac info o pileczce dalej
         //inaczej wysylaja sie smieci
-        geometry_msgs::Point wybrana;
+        //geometry_msgs::Point wybrana;
         wybrana.x = wybrana_x;
         wybrana.y = wybrana_y;
         wybrana.z = wybrana_z;
@@ -166,6 +175,47 @@ void imageCallback(const sensor_msgs::ImageConstPtr& original_image)
     * given as a template parameter to the advertise<>() call, as was done
     * in the constructor in main().
     */
+}
+
+
+void depthCallback(const sensor_msgs::ImageConstPtr& original_image, const sensor_msgs::CameraInfoConstPtr& info)
+{
+   //int depth = original_image->data[wybrana.x][wybrana.y];
+
+    cv_bridge::CvImagePtr cv_ptr;
+    try
+    {
+        //Always copy, returning a mutable CvImage
+        //OpenCV expects color images to use BGR channel order.
+        cv_ptr = cv_bridge::toCvCopy(original_image, sensor_msgs::image_encodings::TYPE_32FC1);
+    }
+    catch (cv_bridge::Exception& e)
+    {
+        //if there is an error during conversion, display it
+        ROS_ERROR("tutorialROSOpenCV::main.cpp::cv_bridge exception: %s", e.what());
+        return;
+    }
+    
+    cv::Point2d uv_point(wybrana.x, wybrana.y);
+    cam_model.fromCameraInfo(info);
+    Mat depth_image = cv_ptr->image;
+    float ball_depth;
+    for(int i=-2; i++; i<=2){
+        for(int j=-2; j++; j<=2){
+            //ball_depth += depth_image.at<float>(wybrana.x+i, wybrana.y+j);
+        }
+    }
+    //ball_depth = ball_depth/25;
+    ball_depth = depth_image.at<float>(wybrana.x, wybrana.y);
+    geometry_msgs::Point message_selected;
+    cv::Point3d xy_point;
+    xy_point = cam_model.projectPixelTo3dRay(uv_point);
+    message_selected.x = xy_point.x;
+    message_selected.y = xy_point.y;
+    message_selected.z = ball_depth;
+    selected_ball.publish(message_selected); 
+   // pub.publish(cv_ptr->toImageMsg());
+
 }
  
 /**
@@ -205,8 +255,11 @@ int main(int argc, char **argv)
     * When the Subscriber object is destructed, it will automatically unsubscribe from the "camera/image_raw" base topic.
     */
         image_transport::Subscriber sub = it.subscribe("/camera/rgb/image_color", 1, imageCallback);
+	
+	image_transport::CameraSubscriber sub_depth = it.subscribeCamera("/camera/depth_registered/sw_registered/image_rect_raw", 1, depthCallback);
 
         balls = nh.advertise<geometry_msgs::Point>("the_ball", 100);
+       selected_ball = nh.advertise<geometry_msgs::Point>("ball_depth", 100);
     //OpenCV HighGUI call to destroy a display window on shut-down.
     //cv::destroyWindow("Pilki");
     /**

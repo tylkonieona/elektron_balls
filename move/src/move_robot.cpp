@@ -14,7 +14,8 @@ void ballCallback(geometry_msgs::Point ball)
 {
     float x_position = ball.x;
     float y_position = ball.y;
-    float radius = ball.z;
+   // float radius = ball.z;
+    float z_position = ball.z;
 
 
     geometry_msgs::Twist command;
