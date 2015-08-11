@@ -27,10 +27,12 @@ image_transport::Publisher pub;
 ros::Publisher balls;
 ros::Publisher selected_ball;
 image_geometry::PinholeCameraModel cam_model;
+image_transport::Publisher circle_pub;
 
 
 int ilepilek = 0;
 int licznik = 0;
+int licznik_depth=0;
 int wybrane_10[10][3];
 int licznik_wybrane = 0;
 
@@ -40,7 +42,6 @@ Vec3f last_circle(0,0,0);
 
 
 geometry_msgs::Point wybrana;
-
 
 //This function is called everytime a new image is published
 
@@ -142,10 +143,11 @@ void imageCallback(const sensor_msgs::ImageConstPtr& original_image)
 
         //draw
         // circle center
-       // circle( dst, center_closest, 3, Scalar(255,255,0), -1, 8, 0 );
+        circle( cv_ptr->image, center_closest, 3, Scalar(255,255,0), -1, 8, 0 );
         // circle outline
-       // circle( dst, center_closest, radius_closest, Scalar(255,0,255), 3, 8, 0 );
+        circle( cv_ptr->image, center_closest, radius_closest, Scalar(255,0,255), 3, 8, 0 );
 
+	circle_pub.publish(cv_ptr->toImageMsg());
         //TODO: tylko tutaj wysylac info o pileczce dalej
         //inaczej wysylaja sie smieci
         //geometry_msgs::Point wybrana;
@@ -187,7 +189,7 @@ void depthCallback(const sensor_msgs::ImageConstPtr& original_image, const senso
     {
         //Always copy, returning a mutable CvImage
         //OpenCV expects color images to use BGR channel order.
-        cv_ptr = cv_bridge::toCvCopy(original_image, sensor_msgs::image_encodings::TYPE_32FC1);
+        cv_ptr = cv_bridge::toCvCopy(original_image, sensor_msgs::image_encodings::TYPE_16UC1);
     }
     catch (cv_bridge::Exception& e)
     {
@@ -199,22 +201,62 @@ void depthCallback(const sensor_msgs::ImageConstPtr& original_image, const senso
     cv::Point2d uv_point(wybrana.x, wybrana.y);
     cam_model.fromCameraInfo(info);
     Mat depth_image = cv_ptr->image;
-    float ball_depth;
-    for(int i=-2; i++; i<=2){
-        for(int j=-2; j++; j<=2){
-            //ball_depth += depth_image.at<float>(wybrana.x+i, wybrana.y+j);
-        }
-    }
-    //ball_depth = ball_depth/25;
-    ball_depth = depth_image.at<float>(wybrana.x, wybrana.y);
+    unsigned short ball_depth;
+    std::cout << "u: " << wybrana.x << "  v: " << wybrana.y << "\n"; 
+   // if(wybrana.x >= 2 && wybrana.y >= 2){
+   //     for(int i=-2; i<=2; i++){
+   //        for(int j=-2; j<=2; j++){
+   //             if(ball_depth > depth_image.at<unsigned short>(wybrana.x+i, wybrana.y+j) && depth_image.at<unsigned short>(wybrana.x+i, wybrana.y+j) != 0){
+                	ball_depth = depth_image.at<unsigned short>(wybrana.y,wybrana.x)+20;
+	//	}
+	        //std::cout << "Ball_depth: "<< ball_depth << "\n";
+        //    }
+       // }
+    //}
+   //else ball_depth = 0;
+   //ball_depth = ball_depth/25;
+   // ball_depth = 0.1236 * tan(ball_depth / 2842.5 + 1.1863);
+   //ball_depth = depth_image.at<unsigned short>(wybrana.x, wybrana.y);
+   std::cout << "Odleglosc: " << ball_depth << "\n";
+    //ball_depth=1/(-0.00307 * ball_depth + 3.33);
+    //int x_beg, y_beg, x_end, y_end;
+    
+
+    //if(wybrana.x <= 40) x_beg = 0;
+    //else x_beg = wybrana.x-40;
+
+    //if(wybrana.y <=40) y_beg = 0;
+    //else y_beg = wybrana.y-40;
+
+    //if(wybrana.x >= 600) x_end = 640;
+    //else x_end = wybrana.x+40;
+
+    //if(wybrana.y >= 440) y_end = 480;
+    //else y_end = wybrana.y+40;
+   
+    //cv::Rect region_of_interest = Rect(x_beg, y_beg, 81, 81);
+
+    //Mat ball_surr = depth_image(region_of_interest);
+    
+    //double depth_double, furth;
+
+    //cv::minMaxLoc(ball_surr, &depth_double, &furth);
+    //ball_depth = depth_double;
+    //std::cout << "Ball_depth: " << ball_depth << "\n-------------------\n"; 
     geometry_msgs::Point message_selected;
     cv::Point3d xy_point;
     xy_point = cam_model.projectPixelTo3dRay(uv_point);
+    xy_point = xy_point * ball_depth;
     message_selected.x = xy_point.x;
     message_selected.y = xy_point.y;
-    message_selected.z = ball_depth;
+    //message_selected.x = 0;
+    //message_selected.y = 0;
+    std::cout << "x: " << message_selected.x << "   y: " << message_selected.y << "\n";
+    message_selected.z = xy_point.z;
     selected_ball.publish(message_selected); 
    // pub.publish(cv_ptr->toImageMsg());
+   licznik_depth = 0;
+
 
 }
  
@@ -256,7 +298,7 @@ int main(int argc, char **argv)
     */
         image_transport::Subscriber sub = it.subscribe("/camera/rgb/image_color", 1, imageCallback);
 	
-	image_transport::CameraSubscriber sub_depth = it.subscribeCamera("/camera/depth_registered/sw_registered/image_rect_raw", 1, depthCallback);
+	image_transport::CameraSubscriber sub_depth = it.subscribeCamera("/camera/depth_registered/image_raw", 1, depthCallback);
 
         balls = nh.advertise<geometry_msgs::Point>("the_ball", 100);
        selected_ball = nh.advertise<geometry_msgs::Point>("ball_depth", 100);
@@ -279,7 +321,7 @@ int main(int argc, char **argv)
     * than we can send them, the number here specifies how many messages to
     * buffer up before throwing some away.
     */
-        pub = it.advertise("/camera/image_processed", 1);
+        circle_pub  = it.advertise("/camera/image_processed", 1);
     /**
     * In this application all user callbacks will be called from within the ros::spin() call.
     * ros::spin() will not return until the node has been shutdown, either through a call

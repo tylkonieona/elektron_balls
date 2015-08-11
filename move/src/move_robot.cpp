@@ -5,10 +5,12 @@
 #include <geometry_msgs/Twist.h>
 #include <ros/console.h>
 #include <geometry_msgs/Point.h>
+#include <std_msgs/Int16.h>
 
 //using namespace cv;
 
 ros::Publisher cmd_vel_publisher;
+ros::Publisher hoover_state_pub;
 
 void ballCallback(geometry_msgs::Point ball)
 {
@@ -19,6 +21,7 @@ void ballCallback(geometry_msgs::Point ball)
 
 
     geometry_msgs::Twist command;
+    std_msgs::Int16 state;
     
     command.linear.x = 0;
 	command.linear.y = 0;
@@ -26,26 +29,36 @@ void ballCallback(geometry_msgs::Point ball)
 	command.angular.x = 0;
 	command.angular.y = 0;
 	command.angular.z = 0;
+    	state.data=1;
 
-    if(y_position >= 420 && x_position >= 210 && x_position <= 420){	// STOP
+    while(y_position >= 420 && x_position >= 210 && x_position <= 420){	// STOP
    	 //command.linear.x = 10;
    	 //command.angular.z = y_position/100;
+    	state.data=0;
+    	hoover_state_pub.publish(state);
+
     }
     
     if(y_position < 420 && x_position >= 210 && x_position <= 420){		// do przodu
-		command.linear.x = 1;
+		command.linear.x = 0.5;
+    		state.data=0;
     }
     
     if(x_position >= 420){												// w prawo
-		command.angular.z = -1;
+		command.angular.z = -0.5;
+    		state.data=1;
+
     }
     
     if(x_position <= 210){												// w lewo
-		command.angular.z = 1;
+		command.angular.z = 0.5;
+    		state.data=1;
     }
     
-
+//    command.linear.x = 0;
+//    command.angular.z = 0;
     cmd_vel_publisher.publish(command);
+    	hoover_state_pub.publish(state);
 }
 
 
@@ -58,5 +71,10 @@ int main(int argc, char **argv)
 
     ros::Subscriber ball_s = n.subscribe("the_ball", 1, ballCallback);
     cmd_vel_publisher = n.advertise<geometry_msgs::Twist> ("/cmd_vel", 1);
+    hoover_state_pub = n.advertise<std_msgs::Int16> ("/hoover_state",1);
+
+    std_msgs::Int16 state;
+    state.data=0;
+    hoover_state_pub.publish(state);
     ros::spin();
 }
