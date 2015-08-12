@@ -31,11 +31,22 @@ void ballCallback(geometry_msgs::Point ball)
 	command.angular.z = 0;
     	state.data=1;
 
-    while(y_position >= 420 && x_position >= 210 && x_position <= 420){	// STOP
+    if(y_position >= 420 && x_position >= 210 && x_position <= 420){	// STOP
    	 //command.linear.x = 10;
    	 //command.angular.z = y_position/100;
-    	state.data=0;
-    	hoover_state_pub.publish(state);
+        command.linear.x = 0.5;
+        state.data=0;
+        hoover_state_pub.publish(state);
+        cmd_vel_publisher.publish(command);
+
+        ros::Duration(1.5).sleep();
+
+        command.linear.x = 0;
+        //state.data=0;
+        //hoover_state_pub.publish(state);
+        cmd_vel_publisher.publish(command);
+
+        ros::Duration(10).sleep();
 
     }
     
