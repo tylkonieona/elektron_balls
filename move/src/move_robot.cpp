@@ -31,7 +31,13 @@ void ballCallback(geometry_msgs::Point ball)
 	command.angular.z = 0;
     	state.data=1;
 
-    if(y_position >= 420 && x_position >= 210 && x_position <= 420){	// STOP
+    if(x_position == 0){						// nie ma pilek, krecimy sie
+	command.angular.z = -0.9;
+	state.data = 1;
+        ros::Duration(1).sleep();
+    }
+
+    if(y_position >= 400 && x_position >= 300 && x_position <= 340){	// STOP
    	 //command.linear.x = 10;
    	 //command.angular.z = y_position/100;
         command.linear.x = 0.5;
@@ -39,7 +45,7 @@ void ballCallback(geometry_msgs::Point ball)
         hoover_state_pub.publish(state);
         cmd_vel_publisher.publish(command);
 
-        ros::Duration(1.5).sleep();
+        ros::Duration(3).sleep();
 
         command.linear.x = 0;
         //state.data=0;
@@ -50,19 +56,19 @@ void ballCallback(geometry_msgs::Point ball)
 
     }
     
-    if(y_position < 420 && x_position >= 210 && x_position <= 420){		// do przodu
+    if(y_position < 400 && x_position >= 210 && x_position <= 430){		// do przodu
 		command.linear.x = 0.5;
-    		state.data=0;
+    		state.data=1;
     }
     
-    if(x_position >= 420){												// w prawo
-		command.angular.z = -0.5;
+    if(x_position >= 430 || (y_position >= 400 && x_position > 340)){												// w prawo
+		command.angular.z = -1;
     		state.data=1;
 
     }
     
-    if(x_position <= 210){												// w lewo
-		command.angular.z = 0.5;
+    if(x_position <= 210 || (y_position >= 400 & x_position < 300)){												// w lewo
+		command.angular.z = 1;
     		state.data=1;
     }
     

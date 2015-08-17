@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   message_generation
   image_geometry
+  tf
 )
 
 

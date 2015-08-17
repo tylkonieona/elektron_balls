@@ -28,13 +28,15 @@ ros::Publisher balls;
 ros::Publisher selected_ball;
 image_geometry::PinholeCameraModel cam_model;
 image_transport::Publisher circle_pub;
-
+//tf::TransformListener tf_listener;
+tf::TransformListener* tf_listener = NULL;
 
 int ilepilek = 0;
 int licznik = 0;
 int licznik_depth=0;
-int wybrane_10[10][3];
+//int wybrane_10[10][3];
 int licznik_wybrane = 0;
+int no_balls_counter = 0;
 
 vector<Vec3f> circles_all;
 
@@ -83,14 +85,32 @@ void imageCallback(const sensor_msgs::ImageConstPtr& original_image)
       vector<Vec3f> circles;
 
       /// Apply the Hough Transform to find the circles
-      HoughCircles(dst, circles, CV_HOUGH_GRADIENT, 1, dst.rows/8, 60, 30, 3, 20);
+      HoughCircles(dst, circles, CV_HOUGH_GRADIENT, 1, dst.rows/8, 80, 40, 3, 20);
       circles_all.insert(circles_all.end(), circles.begin(), circles.end());
 
       if(circles.size()>0) licznik_wybrane++;
+      if(circles.size()==0) no_balls_counter++;
+	
+      if(no_balls_counter==10){
+            no_balls_counter = 0;
+	    licznik_wybrane = 0;
+	    geometry_msgs::Point no_balls;
+	    no_balls.x = 0;
+	    no_balls.y = 0;
+	    no_balls.z = 0;
+            balls.publish(no_balls);
+            std::cout << "Nie bylo pilek juz " << no_balls_counter << " razy. \n";
+	    circle_pub.publish(cv_ptr->toImageMsg());
+        circles_all.clear();
+
+      }
       
       if(licznik_wybrane==10) //mamy cala tablice pilek
       {
-        licznik_wybrane=0;
+        licznik_wybrane = 0;
+	no_balls_counter = 0;
+
+	std::cout << "10 razy byly pilki! \n";
         
         vector <int> pilki;
         for( int k = 0; k < circles_all.size(); k++ ){
@@ -113,6 +133,11 @@ void imageCallback(const sensor_msgs::ImageConstPtr& original_image)
         // w tej chwili w pilki[] sa informacje o liczbie wystapien kazdej roznej pileczki
         // jesli jest 1, to za malo - niewiarygodne
         // trzeba wybrac najblizsza, z ponad jednym powtorzeniem
+
+	// TODO
+	// jak juz zbierzemy te prawdopodobne pilki
+	// to trzeba sprawdzic, czy to faktycznie pilki
+	// jak nie, to wstawic 0 w odpowiednie miejsce
 
         int closest = 0;
         int distance = 0;
@@ -155,21 +180,13 @@ void imageCallback(const sensor_msgs::ImageConstPtr& original_image)
         wybrana.y = wybrana_y;
         wybrana.z = wybrana_z;
      
-        balls.publish(wybrana);
+       // balls.publish(wybrana);
 
         circles_all.clear();
-        //std::cout << "Pilek jest:" << ilepilek << "--------------------------------------\n";
-        //for(size_t i=0; i++; i<circles_all.size()){
-        //    std::cout << "\n\n\n------------------\n "<< circles_all[i];
-        //}
         pilki.clear();
-
         
       }
 
-	//namedWindow( "Pilki", CV_WINDOW_AUTOSIZE );
-    //imshow( "Pilki", dst );
-    //Add some delay in miliseconds. The function only works if there is at least one HighGUI window created and the window is active. If there are several HighGUI windows, any of them can be active.
     cv::waitKey(3);
     /**
     * The publish() function is how you send messages. The parameter
@@ -182,18 +199,13 @@ void imageCallback(const sensor_msgs::ImageConstPtr& original_image)
 
 void depthCallback(const sensor_msgs::ImageConstPtr& original_image, const sensor_msgs::CameraInfoConstPtr& info)
 {
-   //int depth = original_image->data[wybrana.x][wybrana.y];
-
     cv_bridge::CvImagePtr cv_ptr;
     try
     {
-        //Always copy, returning a mutable CvImage
-        //OpenCV expects color images to use BGR channel order.
         cv_ptr = cv_bridge::toCvCopy(original_image, sensor_msgs::image_encodings::TYPE_16UC1);
     }
     catch (cv_bridge::Exception& e)
     {
-        //if there is an error during conversion, display it
         ROS_ERROR("tutorialROSOpenCV::main.cpp::cv_bridge exception: %s", e.what());
         return;
     }
@@ -202,59 +214,50 @@ void depthCallback(const sensor_msgs::ImageConstPtr& original_image, const senso
     cam_model.fromCameraInfo(info);
     Mat depth_image = cv_ptr->image;
     unsigned short ball_depth;
-    std::cout << "u: " << wybrana.x << "  v: " << wybrana.y << "\n"; 
-   // if(wybrana.x >= 2 && wybrana.y >= 2){
-   //     for(int i=-2; i<=2; i++){
-   //        for(int j=-2; j<=2; j++){
-   //             if(ball_depth > depth_image.at<unsigned short>(wybrana.x+i, wybrana.y+j) && depth_image.at<unsigned short>(wybrana.x+i, wybrana.y+j) != 0){
-                	ball_depth = depth_image.at<unsigned short>(wybrana.y,wybrana.x)+20;
-	//	}
-	        //std::cout << "Ball_depth: "<< ball_depth << "\n";
-        //    }
-       // }
-    //}
-   //else ball_depth = 0;
-   //ball_depth = ball_depth/25;
-   // ball_depth = 0.1236 * tan(ball_depth / 2842.5 + 1.1863);
-   //ball_depth = depth_image.at<unsigned short>(wybrana.x, wybrana.y);
-   std::cout << "Odleglosc: " << ball_depth << "\n";
-    //ball_depth=1/(-0.00307 * ball_depth + 3.33);
-    //int x_beg, y_beg, x_end, y_end;
-    
+//    std::cout << "u: " << wybrana.x << "  v: " << wybrana.y << "\n"; 
 
-    //if(wybrana.x <= 40) x_beg = 0;
-    //else x_beg = wybrana.x-40;
+    ball_depth = depth_image.at<unsigned short>(wybrana.y,wybrana.x)+20;
 
-    //if(wybrana.y <=40) y_beg = 0;
-    //else y_beg = wybrana.y-40;
+//    std::cout << "Odleglosc: " << ball_depth << "\n";
 
-    //if(wybrana.x >= 600) x_end = 640;
-    //else x_end = wybrana.x+40;
-
-    //if(wybrana.y >= 440) y_end = 480;
-    //else y_end = wybrana.y+40;
-   
-    //cv::Rect region_of_interest = Rect(x_beg, y_beg, 81, 81);
-
-    //Mat ball_surr = depth_image(region_of_interest);
-    
-    //double depth_double, furth;
-
-    //cv::minMaxLoc(ball_surr, &depth_double, &furth);
-    //ball_depth = depth_double;
-    //std::cout << "Ball_depth: " << ball_depth << "\n-------------------\n"; 
     geometry_msgs::Point message_selected;
     cv::Point3d xy_point;
     xy_point = cam_model.projectPixelTo3dRay(uv_point);
     xy_point = xy_point * ball_depth;
-    message_selected.x = xy_point.x;
-    message_selected.y = xy_point.y;
-    //message_selected.x = 0;
-    //message_selected.y = 0;
-    std::cout << "x: " << message_selected.x << "   y: " << message_selected.y << "\n";
-    message_selected.z = xy_point.z;
-    selected_ball.publish(message_selected); 
-   // pub.publish(cv_ptr->toImageMsg());
+
+    geometry_msgs::PointStamped xy_point_stamped, odom_point_stamped;
+
+    xy_point_stamped.header.frame_id = "/camera_rgb_optical_frame";
+    xy_point_stamped.header.stamp = ros::Time::now();
+
+    xy_point_stamped.point.x = 0.001*xy_point.x;
+    xy_point_stamped.point.y = 0.001*xy_point.y;
+    xy_point_stamped.point.z = 0.001*xy_point.z;
+
+    //tf::StampedTransform transform;
+
+    try {
+        tf_listener->waitForTransform("/base_link", "/camera_rgb_optical_frame", ros::Time::now(), ros::Duration(10.0) );
+       // tf_listener.lookupTransform("/odom", "/camera_rgb_optical_frame", ros::Time(0), transform);
+        tf_listener->transformPoint("/base_link", xy_point_stamped, odom_point_stamped);
+    } catch (tf::TransformException ex) {
+        ROS_ERROR("%s",ex.what());
+    }
+
+
+    message_selected.x = odom_point_stamped.point.x;
+    message_selected.y = odom_point_stamped.point.y;
+//    std::cout << "x: " << message_selected.x << "   y: " << message_selected.y << "\n";
+    message_selected.z = odom_point_stamped.point.z;
+   // message_selected.x = xy_point_stamped.point.x;
+   // message_selected.y = xy_point_stamped.point.y;
+   // message_selected.z = xy_point_stamped.point.z;
+
+    if(message_selected.z > 0.05){
+	std::cout << "To nie pilka, jest za wysoko! \n";
+    }
+    	balls.publish(wybrana);
+    	selected_ball.publish(message_selected);
    licznik_depth = 0;
 
 
@@ -265,69 +268,23 @@ void depthCallback(const sensor_msgs::ImageConstPtr& original_image, const senso
 */
 int main(int argc, char **argv)
 {
-    /**
-    * The ros::init() function needs to see argc and argv so that it can perform
-    * any ROS arguments and name remapping that were provided at the command line. For programmatic
-    * remappings you can use a different version of init() which takes remappings
-    * directly, but for most command-line programs, passing argc and argv is the easiest
-    * way to do it.  The third argument to init() is the name of the node. Node names must be unique in a running system.
-    * The name used here must be a base name, ie. it cannot have a / in it.
-    * You must call one of the versions of ros::init() before using any other
-    * part of the ROS system.
-    */
-        ros::init(argc, argv, "image_processor");
-    /**
-    * NodeHandle is the main access point to communications with the ROS system.
-    * The first NodeHandle constructed will fully initialize this node, and the last
-    * NodeHandle destructed will close down the node.
-    */
-        ros::NodeHandle nh;
+    ros::init(argc, argv, "image_processor");
+
+    tf_listener = new (tf::TransformListener);
+
+    ros::NodeHandle nh;
     //Create an ImageTransport instance, initializing it with our NodeHandle.
     image_transport::ImageTransport it(nh);
 
-	//ros::Publisher vel_pub;
-	//vel_pub = nh.advertise<geometry_msgs::Twist> ("cmd_vel", 1);
-    //OpenCV HighGUI call to create a display window on start-up.
-    //cv::namedWindow("Pilki", CV_WINDOW_AUTOSIZE);
-    /**
-    * Subscribe to the "camera/image_raw" base topic. The actual ROS topic subscribed to depends on which transport is used.
-    * In the default case, "raw" transport, the topic is in fact "camera/image_raw" with type sensor_msgs/Image. ROS will call
-    * the "imageCallback" function whenever a new image arrives. The 2nd argument is the queue size.
-    * subscribe() returns an image_transport::Subscriber object, that you must hold on to until you want to unsubscribe.
-    * When the Subscriber object is destructed, it will automatically unsubscribe from the "camera/image_raw" base topic.
-    */
-        image_transport::Subscriber sub = it.subscribe("/camera/rgb/image_color", 1, imageCallback);
+    image_transport::Subscriber sub = it.subscribe("/camera/rgb/image_color", 1, imageCallback);
 	
 	image_transport::CameraSubscriber sub_depth = it.subscribeCamera("/camera/depth_registered/image_raw", 1, depthCallback);
 
-        balls = nh.advertise<geometry_msgs::Point>("the_ball", 100);
-       selected_ball = nh.advertise<geometry_msgs::Point>("ball_depth", 100);
-    //OpenCV HighGUI call to destroy a display window on shut-down.
-    //cv::destroyWindow("Pilki");
-    /**
-    * The advertise() function is how you tell ROS that you want to
-    * publish on a given topic name. This invokes a call to the ROS
-    * master node, which keeps a registry of who is publishing and who
-    * is subscribing. After this advertise() call is made, the master
-    * node will notify anyone who is trying to subscribe to this topic name,
-    * and they will in turn negotiate a peer-to-peer connection with this
-    * node.  advertise() returns a Publisher object which allows you to
-    * publish messages on that topic through a call to publish().  Once
-    * all copies of the returned Publisher object are destroyed, the topic
-    * will be automatically unadvertised.
-    *
-    * The second parameter to advertise() is the size of the message queue
-    * used for publishing messages.  If messages are published more quickly
-    * than we can send them, the number here specifies how many messages to
-    * buffer up before throwing some away.
-    */
-        circle_pub  = it.advertise("/camera/image_processed", 1);
-    /**
-    * In this application all user callbacks will be called from within the ros::spin() call.
-    * ros::spin() will not return until the node has been shutdown, either through a call
-    * to ros::shutdown() or a Ctrl-C.
-    */
-        ros::spin();
+    balls = nh.advertise<geometry_msgs::Point>("the_ball", 1);
+    selected_ball = nh.advertise<geometry_msgs::Point>("ball_depth", 1);
+
+    circle_pub  = it.advertise("/camera/image_processed", 1);
+    ros::spin();
     //ROS_INFO is the replacement for printf/cout.
     ROS_INFO("tutorialROSOpenCV::main.cpp::No error.");
  
