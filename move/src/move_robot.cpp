@@ -7,8 +7,6 @@
 #include <geometry_msgs/Point.h>
 #include <std_msgs/Int16.h>
 
-//using namespace cv;
-
 ros::Publisher cmd_vel_publisher;
 ros::Publisher hoover_state_pub;
 
@@ -32,14 +30,12 @@ void ballCallback(geometry_msgs::Point ball)
     	state.data=1;
 
     if(x_position == 0){						// nie ma pilek, krecimy sie
-	command.angular.z = -0.9;
+	command.angular.z = -0.7;
 	state.data = 1;
-        ros::Duration(1).sleep();
+        ros::Duration(0.5).sleep();
     }
 
     if(y_position >= 400 && x_position >= 300 && x_position <= 340){	// STOP
-   	 //command.linear.x = 10;
-   	 //command.angular.z = y_position/100;
         command.linear.x = 0.5;
         state.data=0;
         hoover_state_pub.publish(state);
@@ -48,8 +44,6 @@ void ballCallback(geometry_msgs::Point ball)
         ros::Duration(3).sleep();
 
         command.linear.x = 0;
-        //state.data=0;
-        //hoover_state_pub.publish(state);
         cmd_vel_publisher.publish(command);
 
         ros::Duration(10).sleep();
@@ -62,18 +56,16 @@ void ballCallback(geometry_msgs::Point ball)
     }
     
     if(x_position >= 430 || (y_position >= 400 && x_position > 340)){												// w prawo
-		command.angular.z = -1;
+		command.angular.z = -0.7;
     		state.data=1;
 
     }
     
     if(x_position <= 210 || (y_position >= 400 & x_position < 300)){												// w lewo
-		command.angular.z = 1;
+		command.angular.z = 0.7;
     		state.data=1;
     }
     
-//    command.linear.x = 0;
-//    command.angular.z = 0;
     cmd_vel_publisher.publish(command);
     	hoover_state_pub.publish(state);
 }

@@ -28,24 +28,24 @@ ros::Publisher balls;
 ros::Publisher selected_ball;
 image_geometry::PinholeCameraModel cam_model;
 image_transport::Publisher circle_pub;
-//tf::TransformListener tf_listener;
 tf::TransformListener* tf_listener = NULL;
 
 int ilepilek = 0;
 int licznik = 0;
 int licznik_depth=0;
-//int wybrane_10[10][3];
 int licznik_wybrane = 0;
 int no_balls_counter = 0;
 
 vector<Vec3f> circles_all;
+vector<int> pilki;
+
+int balls_written = 0;
+int depth_written = 0;
+int ball_chosen = 0;
 
 Vec3f last_circle(0,0,0);
 
-
 geometry_msgs::Point wybrana;
-
-//This function is called everytime a new image is published
 
 void imageCallback(const sensor_msgs::ImageConstPtr& original_image)
 {
@@ -53,8 +53,6 @@ void imageCallback(const sensor_msgs::ImageConstPtr& original_image)
     cv_bridge::CvImagePtr cv_ptr;
     try
     {
-        //Always copy, returning a mutable CvImage
-        //OpenCV expects color images to use BGR channel order.
         cv_ptr = cv_bridge::toCvCopy(original_image, enc::BGR8);
     }
     catch (cv_bridge::Exception& e)
@@ -64,141 +62,158 @@ void imageCallback(const sensor_msgs::ImageConstPtr& original_image)
         return;
     }
 
+
     Mat orig_image;
     orig_image = cv_ptr->image;
 
     Mat src_gray, dst, dst2, dst3, dst4, abs_dst3, abs_dst4;
-
     Mat grad;
 
     /// Convert it to gray
-      cvtColor( cv_ptr->image, src_gray, CV_BGR2GRAY );
+    cvtColor( cv_ptr->image, src_gray, CV_BGR2GRAY );
       
-      Sobel(src_gray, dst3, CV_16S, 1, 0, 3, 1, 0, BORDER_DEFAULT);
-      convertScaleAbs( dst3, abs_dst3 );
+    Sobel(src_gray, dst3, CV_16S, 1, 0, 3, 1, 0, BORDER_DEFAULT);
+    convertScaleAbs( dst3, abs_dst3 );
 
-      Sobel(src_gray, dst4, CV_16S, 0, 1, 3, 1, 0, BORDER_DEFAULT);
-      convertScaleAbs( dst4, abs_dst4 );
+    Sobel(src_gray, dst4, CV_16S, 0, 1, 3, 1, 0, BORDER_DEFAULT);
+    convertScaleAbs( dst4, abs_dst4 );
 
-      addWeighted( abs_dst3, 0.5, abs_dst4, 0.5, 0, dst );
+    addWeighted( abs_dst3, 0.5, abs_dst4, 0.5, 0, dst );
 
-      vector<Vec3f> circles;
+    vector<Vec3f> circles;
 
-      /// Apply the Hough Transform to find the circles
-      HoughCircles(dst, circles, CV_HOUGH_GRADIENT, 1, dst.rows/8, 80, 40, 3, 20);
-      circles_all.insert(circles_all.end(), circles.begin(), circles.end());
+    /// Apply the Hough Transform to find the circles
+    HoughCircles(dst, circles, CV_HOUGH_GRADIENT, 1, dst.rows/8, 80, 40, 3, 20);
+    circles_all.insert(circles_all.end(), circles.begin(), circles.end());
 
-      if(circles.size()>0) licznik_wybrane++;
-      if(circles.size()==0) no_balls_counter++;
+    if(circles.size()>0) licznik_wybrane++;
+    if(circles.size()==0) no_balls_counter++;
 	
-      if(no_balls_counter==10){
+    if(no_balls_counter==5 && balls_written==0){
             no_balls_counter = 0;
-	    licznik_wybrane = 0;
-	    geometry_msgs::Point no_balls;
-	    no_balls.x = 0;
-	    no_balls.y = 0;
-	    no_balls.z = 0;
+            licznik_wybrane = 0;
+            geometry_msgs::Point no_balls;
+            no_balls.x = 0;
+            no_balls.y = 0;
+            no_balls.z = 0;
             balls.publish(no_balls);
             std::cout << "Nie bylo pilek juz " << no_balls_counter << " razy. \n";
-	    circle_pub.publish(cv_ptr->toImageMsg());
-        circles_all.clear();
+            circle_pub.publish(cv_ptr->toImageMsg());
+            circles_all.clear();
 
-      }
-      
-      if(licznik_wybrane==10) //mamy cala tablice pilek
-      {
-        licznik_wybrane = 0;
-	no_balls_counter = 0;
+    }
 
-	std::cout << "10 razy byly pilki! \n";
-        
-        vector <int> pilki;
-        for( int k = 0; k < circles_all.size(); k++ ){
-            pilki.push_back(1);
-        }
+    if(balls_written==0){
 
-        for( size_t i = 0; i < circles_all.size(); i++ ){
-            if (pilki[i]!=0){
-                for(int j=i+1; j<circles_all.size(); j++){
-                    if(pilki[j]!=0 && abs(circles_all[j][0]-circles_all[i][0])<=6 && abs(circles_all[j][1]-circles_all[i][1])<=10 &&
-                            abs(circles_all[j][2]-circles_all[i][2])<=10){
-                        pilki[j]=0;
-                        pilki[i]++;// ta pilka to tak naprawde ta sama pilka
+        if(licznik_wybrane==5) //mamy cala tablice pilek
+        {
+
+            std::cout << "10 razy byly pilki! \n";
+            //vector <int> pilki;
+            for( int k = 0; k < circles_all.size(); k++ ){
+                pilki.push_back(1);
+            }
+
+            for( size_t i = 0; i < circles_all.size(); i++ ){
+                if (pilki[i]!=0){
+                    for(int j=i+1; j<circles_all.size(); j++){
+                        if(pilki[j]!=0 && abs(circles_all[j][0]-circles_all[i][0])<=6 && abs(circles_all[j][1]-circles_all[i][1])<=10 &&
+                                abs(circles_all[j][2]-circles_all[i][2])<=10){
+                            pilki[j]=0;
+                            pilki[i]++;// ta pilka to tak naprawde ta sama pilka
+                        }
                     }
                 }
+                //i++;
             }
-            i++;
-		}
+            balls_written = 1;
+            std::cout << "Pilki zapisane w skondensowanej formie \n";
+         }
+   }
 
         // w tej chwili w pilki[] sa informacje o liczbie wystapien kazdej roznej pileczki
         // jesli jest 1, to za malo - niewiarygodne
         // trzeba wybrac najblizsza, z ponad jednym powtorzeniem
 
-	// TODO
 	// jak juz zbierzemy te prawdopodobne pilki
 	// to trzeba sprawdzic, czy to faktycznie pilki
 	// jak nie, to wstawic 0 w odpowiednie miejsce
+    if(depth_written==1 && ball_chosen==0)
+	{
+        	int closest = -1;
+        	int distance = 0;
+        	for(size_t i=0; i<circles_all.size(); i++){
+            	    if(pilki[i]>=1){
+                        if(abs(circles_all[i][0]-last_circle[0])<=6 && abs(circles_all[i][1]-last_circle[1])<=10 && abs(circles_all[i][2]-last_circle[2])<=10){
+                                distance=circles_all[i][2];
+                    			closest=i;
+                    			break;
+                        }
+                        if(circles_all[i][2]>=distance){
+                            distance=circles_all[i][2];
+                            closest=i;
+                        }
+                    }
+        	}
 
-        int closest = 0;
-        int distance = 0;
-        for(size_t i=0; i<circles_all.size(); i++){
-            if(pilki[i]>1){
-				if(abs(circles_all[i][0]-last_circle[0])<=6 && abs(circles_all[i][1]-last_circle[1])<=10 && abs(circles_all[i][2]-last_circle[2])<=10){
-					distance=circles_all[i][2];
-                    closest=i;
-                    break;
-				}
-                if(circles_all[i][2]>=distance){
-                    distance=circles_all[i][2];
-                    closest=i;
-                }
-            }
-        }
 
-        int wybrana_x = circles_all[closest][0];
-        int wybrana_y = circles_all[closest][1];
-        int wybrana_z = circles_all[closest][2];
-        
-        last_circle[0] = wybrana_x;
-        last_circle[1] = wybrana_y;
-        last_circle[2] = wybrana_z;
 
-        Point center_closest(cvRound(wybrana_x), cvRound(wybrana_y));
-        int radius_closest = cvRound(wybrana_z);
+	    if(closest == -1){
+		std::cout << "NIE WYBRANO ZADNEJ PILKI \n";
+	    }
 
-        //draw
-        // circle center
-        circle( cv_ptr->image, center_closest, 3, Scalar(255,255,0), -1, 8, 0 );
-        // circle outline
-        circle( cv_ptr->image, center_closest, radius_closest, Scalar(255,0,255), 3, 8, 0 );
 
-	circle_pub.publish(cv_ptr->toImageMsg());
-        //TODO: tylko tutaj wysylac info o pileczce dalej
-        //inaczej wysylaja sie smieci
-        //geometry_msgs::Point wybrana;
-        wybrana.x = wybrana_x;
-        wybrana.y = wybrana_y;
-        wybrana.z = wybrana_z;
+	
+            if(closest != -1){
+        	int wybrana_x = circles_all[closest][0];
+        	int wybrana_y = circles_all[closest][1];
+        	int wybrana_z = circles_all[closest][2];
+
+                ball_chosen = 1;
+                std::cout << "Wybrana jedna pilka \n";
+
+        	last_circle[0] = wybrana_x;
+        	last_circle[1] = wybrana_y;
+        	last_circle[2] = wybrana_z;
+
+        	Point center_closest(cvRound(wybrana_x), cvRound(wybrana_y));
+        	int radius_closest = cvRound(wybrana_z);
+
+        	//draw
+        	// circle center
+        	circle( cv_ptr->image, center_closest, 3, Scalar(255,255,0), -1, 8, 0 );
+        	// circle outline
+        	circle( cv_ptr->image, center_closest, radius_closest, Scalar(255,0,255), 3, 8, 0 );
+
+                circle_pub.publish(cv_ptr->toImageMsg());
+
+        	wybrana.x = wybrana_x;
+        	wybrana.y = wybrana_y;
+        	wybrana.z = wybrana_z;
+	    }
      
-       // balls.publish(wybrana);
+        	circles_all.clear();
+        	pilki.clear();
 
-        circles_all.clear();
-        pilki.clear();
+            licznik_wybrane = 0;
+            no_balls_counter = 0;
+
+            balls_written = 0;
+            depth_written = 0;
         
-      }
+      	}
 
     cv::waitKey(3);
-    /**
-    * The publish() function is how you send messages. The parameter
-    * is the message object. The type of this object must agree with the type
-    * given as a template parameter to the advertise<>() call, as was done
-    * in the constructor in main().
-    */
-}
+
+  }
+
+
+
 
 
 void depthCallback(const sensor_msgs::ImageConstPtr& original_image, const sensor_msgs::CameraInfoConstPtr& info)
 {
+
     cv_bridge::CvImagePtr cv_ptr;
     try
     {
@@ -209,56 +224,93 @@ void depthCallback(const sensor_msgs::ImageConstPtr& original_image, const senso
         ROS_ERROR("tutorialROSOpenCV::main.cpp::cv_bridge exception: %s", e.what());
         return;
     }
-    
-    cv::Point2d uv_point(wybrana.x, wybrana.y);
+
     cam_model.fromCameraInfo(info);
     Mat depth_image = cv_ptr->image;
-    unsigned short ball_depth;
-//    std::cout << "u: " << wybrana.x << "  v: " << wybrana.y << "\n"; 
 
-    ball_depth = depth_image.at<unsigned short>(wybrana.y,wybrana.x)+20;
+    if(balls_written == 1){
+        for( size_t i = 0; i < circles_all.size(); i++ ){
+            if (pilki[i]!=0){
+                cv::Point2d uv_point(circles_all[i][0], circles_all[i][1]);
+                unsigned short ball_depth;
+                ball_depth = depth_image.at<unsigned short>(circles_all[i][1], circles_all[i][0])+20;
+                cv::Point3d xy_point;
+                xy_point = cam_model.projectPixelTo3dRay(uv_point);
+                xy_point = xy_point * ball_depth;
 
-//    std::cout << "Odleglosc: " << ball_depth << "\n";
 
-    geometry_msgs::Point message_selected;
-    cv::Point3d xy_point;
-    xy_point = cam_model.projectPixelTo3dRay(uv_point);
-    xy_point = xy_point * ball_depth;
+                geometry_msgs::PointStamped xy_point_stamped, odom_point_stamped;
 
-    geometry_msgs::PointStamped xy_point_stamped, odom_point_stamped;
+                xy_point_stamped.header.frame_id = "/camera_rgb_optical_frame";
+                xy_point_stamped.header.stamp = ros::Time::now();
 
-    xy_point_stamped.header.frame_id = "/camera_rgb_optical_frame";
-    xy_point_stamped.header.stamp = ros::Time::now();
+                xy_point_stamped.point.x = 0.001*xy_point.x;
+                xy_point_stamped.point.y = 0.001*xy_point.y;
+                xy_point_stamped.point.z = 0.001*xy_point.z;
 
-    xy_point_stamped.point.x = 0.001*xy_point.x;
-    xy_point_stamped.point.y = 0.001*xy_point.y;
-    xy_point_stamped.point.z = 0.001*xy_point.z;
+                try {
+                    tf_listener->waitForTransform("/base_link", "/camera_rgb_optical_frame", ros::Time::now(), ros::Duration(10.0) );
+                    tf_listener->transformPoint("/base_link", xy_point_stamped, odom_point_stamped);
+                }
+	 	catch (tf::TransformException ex) {
+                    ROS_ERROR("%s",ex.what());
+                }
 
-    //tf::StampedTransform transform;
+                if(odom_point_stamped.point.z > 0.05){
+                    std::cout << "Skondensowane pilki: to nie pilka, jest za wysoko! \n";
+                    pilki[i]=0;
+                }
 
-    try {
-        tf_listener->waitForTransform("/base_link", "/camera_rgb_optical_frame", ros::Time::now(), ros::Duration(10.0) );
-       // tf_listener.lookupTransform("/odom", "/camera_rgb_optical_frame", ros::Time(0), transform);
-        tf_listener->transformPoint("/base_link", xy_point_stamped, odom_point_stamped);
-    } catch (tf::TransformException ex) {
-        ROS_ERROR("%s",ex.what());
+
+
+            }
+        }
+        depth_written = 1;
+        std::cout << "Policzylem wysokosc dla skondensowanych pilek \n";
     }
 
+    if(ball_chosen == 1){
 
-    message_selected.x = odom_point_stamped.point.x;
-    message_selected.y = odom_point_stamped.point.y;
-//    std::cout << "x: " << message_selected.x << "   y: " << message_selected.y << "\n";
-    message_selected.z = odom_point_stamped.point.z;
-   // message_selected.x = xy_point_stamped.point.x;
-   // message_selected.y = xy_point_stamped.point.y;
-   // message_selected.z = xy_point_stamped.point.z;
+        cv::Point2d uv_point(wybrana.x, wybrana.y);
+        unsigned short ball_depth;
 
-    if(message_selected.z > 0.05){
-	std::cout << "To nie pilka, jest za wysoko! \n";
+        ball_depth = depth_image.at<unsigned short>(wybrana.y,wybrana.x)+20;
+
+        geometry_msgs::Point message_selected;
+        cv::Point3d xy_point;
+        xy_point = cam_model.projectPixelTo3dRay(uv_point);
+        xy_point = xy_point * ball_depth;
+
+        geometry_msgs::PointStamped xy_point_stamped, odom_point_stamped;
+
+        xy_point_stamped.header.frame_id = "/camera_rgb_optical_frame";
+        xy_point_stamped.header.stamp = ros::Time::now();
+
+        xy_point_stamped.point.x = 0.001*xy_point.x;
+        xy_point_stamped.point.y = 0.001*xy_point.y;
+        xy_point_stamped.point.z = 0.001*xy_point.z;
+
+        try {
+            tf_listener->waitForTransform("/base_link", "/camera_rgb_optical_frame", ros::Time::now(), ros::Duration(10.0) );
+            tf_listener->transformPoint("/base_link", xy_point_stamped, odom_point_stamped);
+        } catch (tf::TransformException ex) {
+            ROS_ERROR("%s",ex.what());
+        }
+
+        if(odom_point_stamped.point.z > 0.03){
+            std::cout << "Wybrana pilka to nie pilka, jest za wysoko! \n";
+	}
+        message_selected.x = odom_point_stamped.point.x;
+        message_selected.y = odom_point_stamped.point.y;
+        message_selected.z = odom_point_stamped.point.z;
+
+        std::cout << "Policzylem dla wybranej pilki i publikuje \n";
+        balls.publish(wybrana);
+        selected_ball.publish(message_selected);
+        licznik_depth = 0;
+        ball_chosen = 0;
     }
-    	balls.publish(wybrana);
-    	selected_ball.publish(message_selected);
-   licznik_depth = 0;
+
 
 
 }
