@@ -6,68 +6,145 @@
 #include <ros/console.h>
 #include <geometry_msgs/Point.h>
 #include <std_msgs/Int16.h>
+#include <std_msgs/Bool.h>
+#include <tf/transform_listener.h>
 
 ros::Publisher cmd_vel_publisher;
 ros::Publisher hoover_state_pub;
+ros::Publisher robot_state_publisher;
+tf::TransformListener* tf_listener = NULL;
 
-void ballCallback(geometry_msgs::Point ball)
+void searchCallback(std_msgs::Bool no_balls){
+
+    geometry_msgs::Twist command; // predkosc
+    std_msgs::Int16 state;        // odkurzacz
+
+    std_msgs::Bool robot_state;
+    robot_state.data = 1;
+    robot_state_publisher.publish(robot_state);
+
+    command.linear.x = 0;
+    command.linear.y = 0;
+    command.linear.z = 0;
+    command.angular.x = 0;
+    command.angular.y = 0;
+    command.angular.z = 0.7;
+    state.data=1;
+    // publikacja zadanej predkosci i stanu odkurzacza
+    cmd_vel_publisher.publish(command);
+    hoover_state_pub.publish(state);
+    ros::Duration(1).sleep();
+    command.angular.z=0;
+    cmd_vel_publisher.publish(command);
+
+    robot_state.data = 0;
+    robot_state_publisher.publish(robot_state);
+
+
+}
+
+void ballCallback(geometry_msgs::PointStamped ball)
 {
-    float x_position = ball.x;
-    float y_position = ball.y;
-   // float radius = ball.z;
-    float z_position = ball.z;
+    float x_position = ball.point.x;
+    float y_position = ball.point.y;
+    float z_position = ball.point.z;
 
-
-    geometry_msgs::Twist command;
-    std_msgs::Int16 state;
+    geometry_msgs::Twist command; // predkosc
+    geometry_msgs::PointStamped pipe_link_ball;
+    std_msgs::Int16 state;        // odkurzacz
     
     command.linear.x = 0;
-	command.linear.y = 0;
-	command.linear.z = 0;
-	command.angular.x = 0;
-	command.angular.y = 0;
-	command.angular.z = 0;
-    	state.data=1;
+    command.linear.y = 0;
+    command.linear.z = 0;
+    command.angular.x = 0;
+    command.angular.y = 0;
+    command.angular.z = 0;
+    state.data=1;
 
-    if(x_position == 0){						// nie ma pilek, krecimy sie
-	command.angular.z = -0.7;
-	state.data = 1;
-        ros::Duration(0.5).sleep();
+
+    std_msgs::Bool robot_state;
+    robot_state.data = 1;
+    robot_state_publisher.publish(robot_state);
+
+    ball.header.stamp = ros::Time::now();
+
+    try {
+        tf_listener->waitForTransform("/pipe_link", "/odom", ros::Time::now(), ros::Duration(10.0) );
+        tf_listener->transformPoint("/pipe_link", ball, pipe_link_ball);
+    }
+    catch (tf::TransformException ex) {
+        ROS_ERROR("%s",ex.what());
     }
 
-    if(y_position >= 400 && x_position >= 300 && x_position <= 340){	// STOP
-        command.linear.x = 0.5;
-        state.data=0;
+
+    while(pipe_link_ball.point.y > 0.02){ // pileczka po lewej stronie
+        command.angular.z = 0.7;
+
+        // publikacja zadanej predkosci i stanu odkurzacza
+        cmd_vel_publisher.publish(command);
         hoover_state_pub.publish(state);
+
+        ball.header.stamp = ros::Time::now();
+        // krecimy sie, az pileczka w ukladzie base_link bedzie miala prawie 0 na y
+        try {
+            tf_listener->waitForTransform("/pipe_link", "/odom", ros::Time::now(), ros::Duration(10.0) );
+            tf_listener->transformPoint("/pipe_link", ball, pipe_link_ball);
+        }
+        catch (tf::TransformException ex) {
+            ROS_ERROR("%s",ex.what());
+        }
+    }
+    command.angular.z = 0;
+
+    while(pipe_link_ball.point.y < -0.02){ // pileczka po prawej stronie
+        command.angular.z = -0.7;
+
+        // publikacja zadanej predkosci i stanu odkurzacza
         cmd_vel_publisher.publish(command);
+        hoover_state_pub.publish(state);
 
-        ros::Duration(3).sleep();
+        ball.header.stamp = ros::Time::now();
+        try {
+            tf_listener->waitForTransform("/pipe_link", "/odom", ros::Time::now(), ros::Duration(10.0) );
+            tf_listener->transformPoint("/pipe_link", ball, pipe_link_ball);
+        }
+        catch (tf::TransformException ex) {
+            ROS_ERROR("%s",ex.what());
+        }
+    }
+    command.angular.z = 0;
 
-        command.linear.x = 0;
+    while(pipe_link_ball.point.x >= 0.05){ // pileczka z przodu
+        command.linear.x = 0.5;
+
+        // publikacja zadanej predkosci i stanu odkurzacza
         cmd_vel_publisher.publish(command);
+        hoover_state_pub.publish(state);
 
-        ros::Duration(10).sleep();
+        ball.header.stamp = ros::Time::now();
+        try {
+            tf_listener->waitForTransform("/pipe_link", "/odom", ros::Time::now(), ros::Duration(10.0) );
+            tf_listener->transformPoint("/pipe_link", ball, pipe_link_ball);
+        }
+        catch (tf::TransformException ex) {
+            ROS_ERROR("%s",ex.what());
+        }
+    }
+    command.linear.x = 0;
 
+    if(pipe_link_ball.point.x < 0.05 && pipe_link_ball.point.y < 0.02 && pipe_link_ball.point.y > -0.02){
+	command.linear.x = 0.3;
+	state.data = 0;
+        cmd_vel_publisher.publish(command);
+        hoover_state_pub.publish(state);
+    	ros::Duration(3).sleep();
     }
-    
-    if(y_position < 400 && x_position >= 210 && x_position <= 430){		// do przodu
-		command.linear.x = 0.5;
-    		state.data=1;
-    }
-    
-    if(x_position >= 430 || (y_position >= 400 && x_position > 340)){												// w prawo
-		command.angular.z = -0.7;
-    		state.data=1;
 
-    }
-    
-    if(x_position <= 210 || (y_position >= 400 & x_position < 300)){												// w lewo
-		command.angular.z = 0.7;
-    		state.data=1;
-    }
-    
-    cmd_vel_publisher.publish(command);
-    	hoover_state_pub.publish(state);
+    command.linear.x = 0;
+    robot_state.data = 0;
+    robot_state_publisher.publish(robot_state);
+
+
 }
 
 
@@ -78,9 +155,16 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "move_robot");
     ros::NodeHandle n;
 
-    ros::Subscriber ball_s = n.subscribe("the_ball", 1, ballCallback);
+    //ros::Subscriber ball_s = n.subscribe("the_ball", 1, ballCallback);
+    ros::Subscriber ball_position = n.subscribe("ball_depth", 1, ballCallback);
+    ros::Subscriber search_for_balls = n.subscribe("no_balls", 1, searchCallback);
+
     cmd_vel_publisher = n.advertise<geometry_msgs::Twist> ("/cmd_vel", 1);
     hoover_state_pub = n.advertise<std_msgs::Int16> ("/hoover_state",1);
+
+    tf_listener = new (tf::TransformListener);
+
+    robot_state_publisher = n.advertise<std_msgs::Bool>("got_there", 1);
 
     std_msgs::Int16 state;
     state.data=0;
