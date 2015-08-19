@@ -2,7 +2,7 @@
 <package>
   <name>tutorialrosopencv</name>
   <version>0.0.0</version>
-  <description>The tutorialrosopencv package</description>
+  <description>The balls_detection package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag --> 
   <!-- Example:  -->
@@ -44,7 +44,6 @@
   <build_depend>image_transport</build_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>std_msgs</build_depend>
-  <build_depend>cv_bridge</build_depend>
   <build_depend>OpenCV</build_depend>
   <build_depend>image_geometry</build_depend>
   <build_depend>tf</build_depend>
