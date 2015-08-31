@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(move)
+project(walls_detection)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -9,14 +9,11 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
   roscpp
   std_msgs
-  cv_bridge
-  joy
-  geometry_msgs
-  nav_msgs
-  elektron_base
+  message_generation
+  image_geometry
   tf
+  geometry_msgs
 )
-
 
 find_package(OpenCV REQUIRED)
 ## System dependencies are found with CMake's conventions
@@ -53,18 +50,18 @@ find_package(OpenCV REQUIRED)
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
+ add_message_files(
+   FILES
+   Walls.msg
 #   Message2.msg
-# )
+ )
 
 ## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-#   Service1.srv
+ add_service_files(
+   FILES
+   CheckWalls.srv
 #   Service2.srv
-# )
+ )
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -74,10 +71,11 @@ find_package(OpenCV REQUIRED)
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   std_msgs
-# )
+ generate_messages(
+   DEPENDENCIES
+   std_msgs
+   geometry_msgs  # Or other packages containing msgs
+ )
 
 ###################################
 ## catkin specific configuration ##
@@ -90,8 +88,8 @@ find_package(OpenCV REQUIRED)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 #  INCLUDE_DIRS include
-#  LIBRARIES tutorialrosopencv
-#  CATKIN_DEPENDS cv_bridge image_transport opencv2 roscpp std_msgs uvc_camera
+#  LIBRARIES walls_detection
+  CATKIN_DEPENDS message_runtime
 #  DEPENDS system_lib
 )
 
@@ -107,24 +105,19 @@ include_directories(
 )
 
 ## Declare a cpp library
-# add_library(tutorialrosopencv
-#   src/${PROJECT_NAME}/tutorialrosopencv.cpp
+# add_library(walls_detection
+#   src/${PROJECT_NAME}/walls_detection.cpp
 # )
 
 ## Declare a cpp executable
-# add_executable(tutorialrosopencv_node src/tutorial_image_processing.cpp)
- add_executable(move_robot src/move_robot.cpp)
+ add_executable(detect_walls src/detect_walls.cpp)
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
- add_dependencies(move_robot walls_detection_gencpp)
+ add_dependencies(detect_walls walls_detection_gencpp)
 
 ## Specify libraries to link a library or executable target against
-# target_link_libraries(tutorialrosopencv_node
-#   ${catkin_LIBRARIES} ${OpenCV_LIBS}
-# )
-
-target_link_libraries(move_robot
+ target_link_libraries(detect_walls
    ${catkin_LIBRARIES} ${OpenCV_LIBS}
  )
 
@@ -143,7 +136,7 @@ target_link_libraries(move_robot
 # )
 
 ## Mark executables and/or libraries for installation
-# install(TARGETS tutorialrosopencv tutorialrosopencv_node
+# install(TARGETS walls_detection walls_detection_node
 #   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
@@ -168,7 +161,7 @@ target_link_libraries(move_robot
 #############
 
 ## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_tutorialrosopencv.cpp)
+# catkin_add_gtest(${PROJECT_NAME}-test test/test_walls_detection.cpp)
 # if(TARGET ${PROJECT_NAME}-test)
 #   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 # endif()

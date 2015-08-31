@@ -5,11 +5,9 @@
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/PointStamped.h>
 #include <std_msgs/Int16.h>
-#include <std_msgs/Float32.h>
 #include <std_msgs/Bool.h>
 #include <tf/transform_listener.h>
 #include <walls_detection/Walls.h>
-#include <walls_detection/CheckWalls.h>
 
 #define sqr(x) ((x)*(x))
 
@@ -17,7 +15,6 @@ ros::Publisher cmd_vel_publisher;
 ros::Publisher hoover_state_pub;
 ros::Publisher robot_state_publisher;
 ros::Publisher wall_need_publisher;
-ros::ServiceClient client;
 tf::TransformListener* tf_listener = NULL;
 bool wall_ready = 0;
 geometry_msgs::PointStamped base_point;
@@ -25,7 +22,6 @@ geometry_msgs::PointStamped base_point_odom;
 
 //geometry_msgs::PointStamped wall_place;
 void scanCallback(std_msgs::Float32 wall_scanner){
-	std::cout << "Jestem w callbacku\n";
 
 }
 
@@ -48,18 +44,19 @@ void searchCallback(std_msgs::Bool no_balls){
     command.linear.z = 0;
     command.angular.x = 0;
     command.angular.y = 0;
-    command.angular.z = 1;
+    command.angular.z = 0.7;
     state.data=1;
 
     // publikacja zadanej predkosci i stanu odkurzacza
     cmd_vel_publisher.publish(command);
     hoover_state_pub.publish(state);
-    ros::Duration(2).sleep();
+    ros::Duration(1).sleep();
     command.angular.z=0;
     cmd_vel_publisher.publish(command);
 
     robot_state.data = 0;
     robot_state_publisher.publish(robot_state);
+
 
 }
 
@@ -81,6 +78,7 @@ void ballCallback(geometry_msgs::PointStamped ball)
     command.angular.z = 0;
     state.data=1;
 
+
     std_msgs::Bool robot_state;
     robot_state.data = 1;
     robot_state_publisher.publish(robot_state);
@@ -94,6 +92,7 @@ void ballCallback(geometry_msgs::PointStamped ball)
     catch (tf::TransformException ex) {
         ROS_ERROR("%s",ex.what());
     }
+
 
     while(pipe_link_ball.point.y > 0.02){ // pileczka po lewej stronie
         command.angular.z = 0.7;
@@ -152,50 +151,46 @@ void ballCallback(geometry_msgs::PointStamped ball)
         }
 
         //zapytac o sciany
-        //std_msgs::Bool message;
-        //message.data = 1;
-        //wall_need_publisher.publish(message);
-	//std::cout << "Wyslalem zapytanie o sciany\n";
+        std_msgs::Bool message;
+        message.data = 1;
+        wall_need_publisher.publish(message);
 
-        //boost::shared_ptr<std_msgs::Float32 const> sharedPtr;
-        std_msgs::Float32 scanner_wall;
+        boost::shared_ptr<walls_detection::Walls const> sharedPtr;
+        walls_detection::Walls pipe_wall;
 
-        //sharedPtr  = ros::topic::waitForMessage<std_msgs::Float32>("walls_scan", ros::Duration(20));
-        //if (sharedPtr == NULL)
-        //    std::cout << "No messages received";
-        //else{
-        //    scanner_wall = *sharedPtr;
-        //    std::cout << "Dostalem wiadomosc!";
-        //}
-
-	walls_detection::CheckWalls srv;
-	srv.request.need_walls.data = 1;
-	if(client.call(srv)){
-		scanner_wall = srv.response.walls;
-		std::cout << "Dostalem odpowiedz\n";
-	}
-	else{
-		std::cout < "Nie udalo sie polaczyc z serwisem\n";
-	}
-
-	geometry_msgs::PointStamped laser_link_ball;	
-        ball.header.stamp = ros::Time::now();
-        try {
-            tf_listener->waitForTransform("/base_laser_link", "/odom", ros::Time::now(), ros::Duration(10.0) );
-            tf_listener->transformPoint("/base_laser_link", ball, laser_link_ball);
-        }
-        catch (tf::TransformException ex) {
-            ROS_ERROR("%s",ex.what());
+        sharedPtr  = ros::topic::waitForMessage<walls_detection::Walls>("/walls_all", ros::Duration(20));
+        if (sharedPtr == NULL)
+            std::cout << "No messages received";
+        else{
+            pipe_wall = *sharedPtr;
+            std::cout << "Dostalem wiadomosc!";
         }
 
-
-        if(laser_link_ball.point.x < scanner_wall.data){ // nie ma scian
+        if(pipe_wall.wall1.point.x==0 && pipe_wall.wall2.point.x==0 && pipe_wall.wall3.point.x==0 && pipe_wall.wall4.point.x==0 && pipe_wall.wall1.point.x==0){ // nie ma scian
             std::cout << "Zadnych scian! Whee!\n";
             std::cout << "Pileczka w odleglosci: " << pipe_link_ball.point.x << ".\n";
         }
         else{                                   // sa jakies sciany
             // obliczyc odleglosc pileczki od punktow na scianach
+            float ball_wall1=10, ball_wall2=10, ball_wall3=10, ball_wall4=10, ball_wall5=10;
+            if(pipe_wall.wall1.point.x!=0){
+                ball_wall1 = sqrt(pow((pipe_link_ball.point.x - pipe_wall.wall1.point.x),2)+pow((pipe_link_ball.point.y - pipe_wall.wall1.point.y),2));
+            }
+            if(pipe_wall.wall2.point.x!=0){
+                ball_wall2 = sqrt(pow((pipe_link_ball.point.x - pipe_wall.wall2.point.x),2)+pow((pipe_link_ball.point.y - pipe_wall.wall2.point.y),2));
+            }
+            if(pipe_wall.wall3.point.x!=0){
+                ball_wall3 = sqrt(pow((pipe_link_ball.point.x - pipe_wall.wall3.point.x),2)+pow((pipe_link_ball.point.y - pipe_wall.wall3.point.y),2));
+            }
+            if(pipe_wall.wall4.point.x!=0){
+                ball_wall4 = sqrt(pow((pipe_link_ball.point.x - pipe_wall.wall4.point.x),2)+pow((pipe_link_ball.point.y - pipe_wall.wall4.point.y),2));
+            }
+            if(pipe_wall.wall5.point.x!=0){
+                ball_wall5 = sqrt(pow((pipe_link_ball.point.x - pipe_wall.wall5.point.x),2)+pow((pipe_link_ball.point.y - pipe_wall.wall5.point.y),2));
+            }
 
+
+            if(ball_wall1 < 0.1 || ball_wall2 < 0.1 || ball_wall3 < 0.1 || ball_wall4 < 0.1 || ball_wall5 < 0.1){
                 std::cout << "Sciana, nigdzie nie jade :( \n";
                 command.angular.z = 0.9;
                 state.data=1;
@@ -213,6 +208,7 @@ void ballCallback(geometry_msgs::PointStamped ball)
                 robot_state_publisher.publish(robot_state);
 
                 return;
+            }
         }
     }
 
@@ -302,7 +298,6 @@ int main(int argc, char **argv)
     tf_listener = new (tf::TransformListener);
 
     robot_state_publisher = n.advertise<std_msgs::Bool>("got_there", 1);
-    client = n.serviceClient<walls_detection::CheckWalls>("need_walls");
 
     std_msgs::Int16 state;
     state.data=0;

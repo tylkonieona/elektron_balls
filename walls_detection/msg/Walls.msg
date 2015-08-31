@@ -1,0 +1,5 @@
+geometry_msgs/PointStamped wall1
+geometry_msgs/PointStamped wall2
+geometry_msgs/PointStamped wall3
+geometry_msgs/PointStamped wall4
+geometry_msgs/PointStamped wall5
